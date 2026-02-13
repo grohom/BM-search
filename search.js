@@ -169,24 +169,26 @@ function showAutocomplete(query) {
         return;
     }
     
-    // Sort matches by frequency (descending)
-    matches.sort((a, b) => (wordFreq[b] || 0) - (wordFreq[a] || 0));
-    
-    // Limit to top 20
-    matches = matches.slice(0, 20);
-    
-    // Build autocomplete HTML
-    const html = matches.map((word, index) => {
-        const highlighted = highlightPrefix(word, lastToken);
-        
-        // Calculate total frequency for all words starting with THIS word
-        // (not the typed fragment, but the actual suggestion)
+    // Calculate total prefix frequency for each match
+    const matchesWithFreq = matches.map(word => {
         const allMatchingWords = getMatchingWords(word, 10000);
         const totalFreq = allMatchingWords.reduce((sum, w) => sum + (wordFreq[w] || 0), 0);
+        return { word, totalFreq };
+    });
+    
+    // Sort by total prefix frequency (descending)
+    matchesWithFreq.sort((a, b) => b.totalFreq - a.totalFreq);
+    
+    // Limit to top 20
+    const topMatches = matchesWithFreq.slice(0, 20);
+    
+    // Build autocomplete HTML
+    const html = topMatches.map((item, index) => {
+        const highlighted = highlightPrefix(item.word, lastToken);
         
-        return `<div class="autocomplete-item" data-index="${index}" data-word="${word}">
+        return `<div class="autocomplete-item" data-index="${index}" data-word="${item.word}">
             <span class="word-text">${highlighted}</span>
-            <span class="word-freq">(${totalFreq.toLocaleString()})</span>
+            <span class="word-freq">(${item.totalFreq.toLocaleString()})</span>
         </div>`;
     }).join('');
     
