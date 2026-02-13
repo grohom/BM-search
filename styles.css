@@ -203,6 +203,7 @@ header h1 {
     align-items: center;
     gap: 10px;
     flex-wrap: wrap;
+    margin-bottom: 20px;
 }
 
 .page-button {

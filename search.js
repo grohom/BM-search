@@ -1,4 +1,4 @@
-// Global state
+// Global state - v2.0
 let words = [];
 let wordIndex = {};
 let projects = [];
@@ -15,7 +15,8 @@ const statusDiv = document.getElementById('status');
 const resultsDiv = document.getElementById('results');
 const resultsInfo = document.getElementById('resultsInfo');
 const resultsList = document.getElementById('resultsList');
-const paginationDiv = document.getElementById('pagination');
+const paginationTop = document.getElementById('paginationTop');
+const paginationBottom = document.getElementById('paginationBottom');
 
 let autocompleteTimeout;
 let selectedAutocompleteIndex = -1;
@@ -25,14 +26,23 @@ async function loadData() {
     try {
         loadingDiv.textContent = 'Loading word list...';
         const wordsResponse = await fetch('words.json');
+        if (!wordsResponse.ok) {
+            throw new Error(`Failed to load words.json: ${wordsResponse.status} ${wordsResponse.statusText}`);
+        }
         words = await wordsResponse.json();
         
         loadingDiv.textContent = 'Loading word index...';
         const indexResponse = await fetch('word_index.json');
+        if (!indexResponse.ok) {
+            throw new Error(`Failed to load word_index.json: ${indexResponse.status} ${indexResponse.statusText}`);
+        }
         wordIndex = await indexResponse.json();
         
         loadingDiv.textContent = 'Loading projects...';
         const projectsResponse = await fetch('projects.json');
+        if (!projectsResponse.ok) {
+            throw new Error(`Failed to load projects.json: ${projectsResponse.status} ${projectsResponse.statusText}`);
+        }
         projects = await projectsResponse.json();
         
         loadingDiv.style.display = 'none';
@@ -45,6 +55,7 @@ async function loadData() {
         loadingDiv.textContent = 'Error loading data: ' + error.message;
         loadingDiv.style.backgroundColor = '#ffebee';
         loadingDiv.style.color = '#c62828';
+        console.error('Full error:', error);
     }
 }
 
@@ -276,7 +287,8 @@ function displayResults(searchTime) {
 // Render pagination controls
 function renderPagination(totalPages) {
     if (totalPages <= 1) {
-        paginationDiv.innerHTML = '';
+        paginationTop.innerHTML = '';
+        paginationBottom.innerHTML = '';
         return;
     }
     
@@ -315,7 +327,9 @@ function renderPagination(totalPages) {
     // Next button
     buttons.push(`<button class="page-button" onclick="goToPage(${currentPage + 1})" ${currentPage === totalPages ? 'disabled' : ''}>Next →</button>`);
     
-    paginationDiv.innerHTML = buttons.join('');
+    const html = buttons.join('');
+    paginationTop.innerHTML = html;
+    paginationBottom.innerHTML = html;
 }
 
 // Go to specific page
