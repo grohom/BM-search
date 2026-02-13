@@ -1,0 +1,385 @@
+// Global state
+let words = [];
+let wordIndex = {};
+let projects = [];
+let currentResults = [];
+let currentPage = 1;
+const resultsPerPage = 50;
+
+// DOM elements
+const searchInput = document.getElementById('searchInput');
+const searchButton = document.getElementById('searchButton');
+const autocompleteDropdown = document.getElementById('autocomplete');
+const loadingDiv = document.getElementById('loading');
+const statusDiv = document.getElementById('status');
+const resultsDiv = document.getElementById('results');
+const resultsInfo = document.getElementById('resultsInfo');
+const resultsList = document.getElementById('resultsList');
+const paginationDiv = document.getElementById('pagination');
+
+let autocompleteTimeout;
+let selectedAutocompleteIndex = -1;
+
+// Load all data files
+async function loadData() {
+    try {
+        loadingDiv.textContent = 'Loading word list...';
+        const wordsResponse = await fetch('words.json');
+        words = await wordsResponse.json();
+        
+        loadingDiv.textContent = 'Loading word index...';
+        const indexResponse = await fetch('word_index.json');
+        wordIndex = await indexResponse.json();
+        
+        loadingDiv.textContent = 'Loading projects...';
+        const projectsResponse = await fetch('projects.json');
+        projects = await projectsResponse.json();
+        
+        loadingDiv.style.display = 'none';
+        showStatus(`Ready! Loaded ${words.length.toLocaleString()} unique words and ${projects.length.toLocaleString()} projects.`);
+        
+        // Enable search
+        searchInput.disabled = false;
+        searchButton.disabled = false;
+    } catch (error) {
+        loadingDiv.textContent = 'Error loading data: ' + error.message;
+        loadingDiv.style.backgroundColor = '#ffebee';
+        loadingDiv.style.color = '#c62828';
+    }
+}
+
+// Binary search to find first word matching prefix
+function findFirstMatch(prefix) {
+    prefix = prefix.toLowerCase();
+    let left = 0;
+    let right = words.length - 1;
+    let result = -1;
+    
+    while (left <= right) {
+        const mid = Math.floor((left + right) / 2);
+        const word = words[mid].toLowerCase();
+        
+        if (word.startsWith(prefix)) {
+            result = mid;
+            right = mid - 1; // Continue searching left for first match
+        } else if (word < prefix) {
+            left = mid + 1;
+        } else {
+            right = mid - 1;
+        }
+    }
+    
+    return result;
+}
+
+// Get all words matching a prefix
+function getMatchingWords(prefix, maxResults = 20) {
+    if (!prefix) return [];
+    
+    const firstMatch = findFirstMatch(prefix);
+    if (firstMatch === -1) return [];
+    
+    const matches = [];
+    const prefixLower = prefix.toLowerCase();
+    
+    for (let i = firstMatch; i < words.length && matches.length < maxResults; i++) {
+        if (words[i].toLowerCase().startsWith(prefixLower)) {
+            matches.push(words[i]);
+        } else {
+            break;
+        }
+    }
+    
+    return matches;
+}
+
+// Show autocomplete suggestions
+function showAutocomplete(query) {
+    if (!query.trim()) {
+        hideAutocomplete();
+        return;
+    }
+    
+    // Get the last word being typed
+    const words = query.trim().split(/\s+/);
+    const lastWord = words[words.length - 1];
+    
+    if (lastWord.length < 2) {
+        hideAutocomplete();
+        return;
+    }
+    
+    const matches = getMatchingWords(lastWord);
+    
+    if (matches.length === 0) {
+        hideAutocomplete();
+        return;
+    }
+    
+    // Build autocomplete HTML
+    const html = matches.map((word, index) => {
+        const highlighted = highlightPrefix(word, lastWord);
+        return `<div class="autocomplete-item" data-index="${index}" data-word="${word}">${highlighted}</div>`;
+    }).join('');
+    
+    autocompleteDropdown.innerHTML = html;
+    autocompleteDropdown.classList.add('show');
+    selectedAutocompleteIndex = -1;
+    
+    // Add click handlers
+    document.querySelectorAll('.autocomplete-item').forEach(item => {
+        item.addEventListener('click', () => {
+            selectAutocompleteItem(item.dataset.word);
+        });
+    });
+}
+
+// Highlight the prefix in the word
+function highlightPrefix(word, prefix) {
+    const prefixLen = prefix.length;
+    return `<strong>${word.substring(0, prefixLen)}</strong>${word.substring(prefixLen)}`;
+}
+
+// Hide autocomplete
+function hideAutocomplete() {
+    autocompleteDropdown.classList.remove('show');
+    selectedAutocompleteIndex = -1;
+}
+
+// Select an autocomplete item
+function selectAutocompleteItem(word) {
+    const currentWords = searchInput.value.trim().split(/\s+/);
+    currentWords[currentWords.length - 1] = word;
+    searchInput.value = currentWords.join(' ') + ' ';
+    hideAutocomplete();
+    searchInput.focus();
+}
+
+// Navigate autocomplete with keyboard
+function navigateAutocomplete(direction) {
+    const items = document.querySelectorAll('.autocomplete-item');
+    if (items.length === 0) return;
+    
+    // Remove previous selection
+    if (selectedAutocompleteIndex >= 0 && selectedAutocompleteIndex < items.length) {
+        items[selectedAutocompleteIndex].classList.remove('selected');
+    }
+    
+    // Update index
+    if (direction === 'down') {
+        selectedAutocompleteIndex = (selectedAutocompleteIndex + 1) % items.length;
+    } else if (direction === 'up') {
+        selectedAutocompleteIndex = selectedAutocompleteIndex <= 0 ? items.length - 1 : selectedAutocompleteIndex - 1;
+    }
+    
+    // Add new selection
+    items[selectedAutocompleteIndex].classList.add('selected');
+    items[selectedAutocompleteIndex].scrollIntoView({ block: 'nearest' });
+}
+
+// Perform search
+function performSearch() {
+    const query = searchInput.value.trim();
+    if (!query) {
+        showStatus('Please enter a search term.');
+        resultsDiv.classList.remove('show');
+        return;
+    }
+    
+    hideAutocomplete();
+    
+    // Tokenize query (split by whitespace)
+    const queryWords = query.toLowerCase().split(/\s+/).filter(w => w.length > 0);
+    
+    if (queryWords.length === 0) {
+        showStatus('Please enter a search term.');
+        resultsDiv.classList.remove('show');
+        return;
+    }
+    
+    // Find projects that contain ALL query words as prefixes
+    const startTime = performance.now();
+    const projectSets = [];
+    
+    for (const queryWord of queryWords) {
+        // Find all dictionary words that start with this query word
+        const matchingWords = getMatchingWords(queryWord, 1000);
+        
+        if (matchingWords.length === 0) {
+            showStatus(`No words found starting with "${queryWord}".`);
+            resultsDiv.classList.remove('show');
+            return;
+        }
+        
+        // Collect all project indices for these words
+        const projectIndices = new Set();
+        for (const word of matchingWords) {
+            const indices = wordIndex[word] || [];
+            indices.forEach(idx => projectIndices.add(idx));
+        }
+        
+        projectSets.push(projectIndices);
+    }
+    
+    // Intersect all sets (projects must match ALL query words)
+    let resultIndices = projectSets[0];
+    for (let i = 1; i < projectSets.length; i++) {
+        resultIndices = new Set([...resultIndices].filter(x => projectSets[i].has(x)));
+    }
+    
+    // Convert to array and get project names
+    currentResults = Array.from(resultIndices)
+        .sort((a, b) => a - b)
+        .map(idx => ({ index: idx, name: projects[idx] }));
+    
+    const endTime = performance.now();
+    const searchTime = (endTime - startTime).toFixed(2);
+    
+    if (currentResults.length === 0) {
+        showStatus(`No projects found matching all search terms. (${searchTime}ms)`);
+        resultsDiv.classList.remove('show');
+        return;
+    }
+    
+    // Show results
+    statusDiv.style.display = 'none';
+    currentPage = 1;
+    displayResults(searchTime);
+}
+
+// Display results with pagination
+function displayResults(searchTime) {
+    const totalResults = currentResults.length;
+    const totalPages = Math.ceil(totalResults / resultsPerPage);
+    const startIdx = (currentPage - 1) * resultsPerPage;
+    const endIdx = Math.min(startIdx + resultsPerPage, totalResults);
+    const pageResults = currentResults.slice(startIdx, endIdx);
+    
+    // Results info
+    resultsInfo.textContent = `Found ${totalResults.toLocaleString()} projects in ${searchTime}ms. Showing ${startIdx + 1}-${endIdx} of ${totalResults.toLocaleString()}.`;
+    
+    // Results list
+    const html = pageResults.map(result => 
+        `<div class="result-item">
+            <span class="result-number">${result.index + 1}.</span>
+            <span class="result-name">${escapeHtml(result.name)}</span>
+        </div>`
+    ).join('');
+    resultsList.innerHTML = html;
+    
+    // Pagination
+    renderPagination(totalPages);
+    
+    resultsDiv.classList.add('show');
+}
+
+// Render pagination controls
+function renderPagination(totalPages) {
+    if (totalPages <= 1) {
+        paginationDiv.innerHTML = '';
+        return;
+    }
+    
+    const buttons = [];
+    
+    // Previous button
+    buttons.push(`<button class="page-button" onclick="goToPage(${currentPage - 1})" ${currentPage === 1 ? 'disabled' : ''}>← Prev</button>`);
+    
+    // Page numbers
+    const maxButtons = 7;
+    let startPage = Math.max(1, currentPage - Math.floor(maxButtons / 2));
+    let endPage = Math.min(totalPages, startPage + maxButtons - 1);
+    
+    if (endPage - startPage < maxButtons - 1) {
+        startPage = Math.max(1, endPage - maxButtons + 1);
+    }
+    
+    if (startPage > 1) {
+        buttons.push(`<button class="page-button" onclick="goToPage(1)">1</button>`);
+        if (startPage > 2) {
+            buttons.push(`<span class="page-info">...</span>`);
+        }
+    }
+    
+    for (let i = startPage; i <= endPage; i++) {
+        buttons.push(`<button class="page-button ${i === currentPage ? 'active' : ''}" onclick="goToPage(${i})">${i}</button>`);
+    }
+    
+    if (endPage < totalPages) {
+        if (endPage < totalPages - 1) {
+            buttons.push(`<span class="page-info">...</span>`);
+        }
+        buttons.push(`<button class="page-button" onclick="goToPage(${totalPages})">${totalPages}</button>`);
+    }
+    
+    // Next button
+    buttons.push(`<button class="page-button" onclick="goToPage(${currentPage + 1})" ${currentPage === totalPages ? 'disabled' : ''}>Next →</button>`);
+    
+    paginationDiv.innerHTML = buttons.join('');
+}
+
+// Go to specific page
+function goToPage(page) {
+    const totalPages = Math.ceil(currentResults.length / resultsPerPage);
+    if (page < 1 || page > totalPages) return;
+    currentPage = page;
+    displayResults(0);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+// Show status message
+function showStatus(message) {
+    statusDiv.textContent = message;
+    statusDiv.classList.add('show');
+}
+
+// Escape HTML
+function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
+
+// Event listeners
+searchInput.addEventListener('input', (e) => {
+    clearTimeout(autocompleteTimeout);
+    autocompleteTimeout = setTimeout(() => {
+        showAutocomplete(e.target.value);
+    }, 200);
+});
+
+searchInput.addEventListener('keydown', (e) => {
+    if (autocompleteDropdown.classList.contains('show')) {
+        if (e.key === 'ArrowDown') {
+            e.preventDefault();
+            navigateAutocomplete('down');
+        } else if (e.key === 'ArrowUp') {
+            e.preventDefault();
+            navigateAutocomplete('up');
+        } else if (e.key === 'Enter') {
+            e.preventDefault();
+            const items = document.querySelectorAll('.autocomplete-item');
+            if (selectedAutocompleteIndex >= 0 && selectedAutocompleteIndex < items.length) {
+                selectAutocompleteItem(items[selectedAutocompleteIndex].dataset.word);
+            } else {
+                performSearch();
+            }
+        } else if (e.key === 'Escape') {
+            hideAutocomplete();
+        }
+    } else if (e.key === 'Enter') {
+        performSearch();
+    }
+});
+
+searchButton.addEventListener('click', performSearch);
+
+// Hide autocomplete when clicking outside
+document.addEventListener('click', (e) => {
+    if (!searchInput.contains(e.target) && !autocompleteDropdown.contains(e.target)) {
+        hideAutocomplete();
+    }
+});
+
+// Initialize
+loadData();
