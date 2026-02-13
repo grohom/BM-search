@@ -170,6 +170,9 @@ header h1 {
     padding: 15px 20px;
     border-bottom: 1px solid #f0f0f0;
     transition: background 0.2s;
+    display: flex;
+    gap: 15px;
+    align-items: flex-start;
 }
 
 .result-item:last-child {
@@ -181,14 +184,17 @@ header h1 {
 }
 
 .result-number {
-    display: inline-block;
-    width: 40px;
+    flex-shrink: 0;
+    min-width: 60px;
     color: #999;
     font-size: 0.9em;
+    text-align: right;
 }
 
 .result-name {
     color: #333;
+    flex: 1;
+    word-wrap: break-word;
 }
 
 .pagination {
