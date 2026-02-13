@@ -48,7 +48,6 @@ const paginationBottom = document.getElementById('paginationBottom');
 
 let autocompleteTimeout;
 let selectedAutocompleteIndex = -1;
-let lastSelectedWords = new Set(); // Track words selected from autocomplete
 
 // Load all data files
 async function loadData() {
@@ -179,10 +178,15 @@ function showAutocomplete(query) {
     // Build autocomplete HTML
     const html = matches.map((word, index) => {
         const highlighted = highlightPrefix(word, lastToken);
-        const freq = wordFreq[word] || 0;
+        
+        // Calculate total frequency for all words starting with THIS word
+        // (not the typed fragment, but the actual suggestion)
+        const allMatchingWords = getMatchingWords(word, 10000);
+        const totalFreq = allMatchingWords.reduce((sum, w) => sum + (wordFreq[w] || 0), 0);
+        
         return `<div class="autocomplete-item" data-index="${index}" data-word="${word}">
             <span class="word-text">${highlighted}</span>
-            <span class="word-freq">(${freq.toLocaleString()})</span>
+            <span class="word-freq">(${totalFreq.toLocaleString()})</span>
         </div>`;
     }).join('');
     
@@ -225,9 +229,6 @@ function selectAutocompleteItem(word) {
         // Fallback: just append
         searchInput.value = currentInput.trim() + ' ' + word + ' ';
     }
-    
-    // Mark this word as selected from autocomplete (for exact matching)
-    lastSelectedWords.add(word);
     
     hideAutocomplete();
     searchInput.focus();
@@ -275,26 +276,17 @@ function performSearch() {
         return;
     }
     
-    // Find projects that contain ALL query tokens
+    // Find projects that contain ALL query tokens as prefixes
     const startTime = performance.now();
     const projectSets = [];
     
     for (const token of queryTokens) {
-        let matchingWords;
-        
-        // Check if this token was selected from autocomplete
-        if (lastSelectedWords.has(token)) {
-            // Exact match - only use this exact word
-            matchingWords = [token];
-        } else {
-            // Prefix match - find all words starting with this token
-            matchingWords = getMatchingWords(token, 1000);
-        }
+        // Find all dictionary words that start with this token (prefix match)
+        const matchingWords = getMatchingWords(token, 1000);
         
         if (matchingWords.length === 0) {
-            showStatus(`No words found matching "${token}".`);
+            showStatus(`No words found starting with "${token}".`);
             resultsDiv.classList.remove('show');
-            lastSelectedWords.clear(); // Clear for next search
             return;
         }
         
@@ -307,9 +299,6 @@ function performSearch() {
         
         projectSets.push(projectIndices);
     }
-    
-    // Clear the selected words set for next search
-    lastSelectedWords.clear();
     
     // Intersect all sets (projects must match ALL query tokens)
     let resultIndices = projectSets[0];
