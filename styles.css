@@ -102,9 +102,8 @@ header h1 {
     border-bottom: 1px solid #f0f0f0;
     transition: background 0.2s;
     display: flex;
-    justify-content: space-between;
     align-items: center;
-    gap: 15px;
+    gap: 8px;
 }
 
 .autocomplete-item:last-child {
@@ -121,7 +120,7 @@ header h1 {
 }
 
 .word-text {
-    flex: 0 1 auto;
+    flex-shrink: 0;
 }
 
 .word-freq {
