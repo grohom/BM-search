@@ -48,6 +48,7 @@ const paginationBottom = document.getElementById('paginationBottom');
 
 let autocompleteTimeout;
 let selectedAutocompleteIndex = -1;
+let lastSelectedWords = new Set(); // Track words selected from autocomplete
 
 // Load all data files
 async function loadData() {
@@ -225,6 +226,9 @@ function selectAutocompleteItem(word) {
         searchInput.value = currentInput.trim() + ' ' + word + ' ';
     }
     
+    // Mark this word as selected from autocomplete (for exact matching)
+    lastSelectedWords.add(word);
+    
     hideAutocomplete();
     searchInput.focus();
 }
@@ -271,17 +275,26 @@ function performSearch() {
         return;
     }
     
-    // Find projects that contain ALL query tokens as prefixes
+    // Find projects that contain ALL query tokens
     const startTime = performance.now();
     const projectSets = [];
     
     for (const token of queryTokens) {
-        // Find all dictionary words that start with this token
-        const matchingWords = getMatchingWords(token, 1000);
+        let matchingWords;
+        
+        // Check if this token was selected from autocomplete
+        if (lastSelectedWords.has(token)) {
+            // Exact match - only use this exact word
+            matchingWords = [token];
+        } else {
+            // Prefix match - find all words starting with this token
+            matchingWords = getMatchingWords(token, 1000);
+        }
         
         if (matchingWords.length === 0) {
-            showStatus(`No words found starting with "${token}".`);
+            showStatus(`No words found matching "${token}".`);
             resultsDiv.classList.remove('show');
+            lastSelectedWords.clear(); // Clear for next search
             return;
         }
         
@@ -294,6 +307,9 @@ function performSearch() {
         
         projectSets.push(projectIndices);
     }
+    
+    // Clear the selected words set for next search
+    lastSelectedWords.clear();
     
     // Intersect all sets (projects must match ALL query tokens)
     let resultIndices = projectSets[0];
