@@ -1,6 +1,7 @@
 // Global state - v2.0
 let words = [];
 let wordIndex = {};
+let wordFreq = {};
 let projects = [];
 let currentResults = [];
 let currentPage = 1;
@@ -57,6 +58,13 @@ async function loadData() {
             throw new Error(`Failed to load words.json: ${wordsResponse.status} ${wordsResponse.statusText}`);
         }
         words = await wordsResponse.json();
+        
+        loadingDiv.textContent = 'Loading word frequencies...';
+        const freqResponse = await fetch('word_freq.json');
+        if (!freqResponse.ok) {
+            throw new Error(`Failed to load word_freq.json: ${freqResponse.status} ${freqResponse.statusText}`);
+        }
+        wordFreq = await freqResponse.json();
         
         loadingDiv.textContent = 'Loading word index...';
         const indexResponse = await fetch('word_index.json');
@@ -154,17 +162,27 @@ function showAutocomplete(query) {
         return;
     }
     
-    const matches = getMatchingWords(lastToken);
+    let matches = getMatchingWords(lastToken);
     
     if (matches.length === 0) {
         hideAutocomplete();
         return;
     }
     
+    // Sort matches by frequency (descending)
+    matches.sort((a, b) => (wordFreq[b] || 0) - (wordFreq[a] || 0));
+    
+    // Limit to top 20
+    matches = matches.slice(0, 20);
+    
     // Build autocomplete HTML
     const html = matches.map((word, index) => {
         const highlighted = highlightPrefix(word, lastToken);
-        return `<div class="autocomplete-item" data-index="${index}" data-word="${word}">${highlighted}</div>`;
+        const freq = wordFreq[word] || 0;
+        return `<div class="autocomplete-item" data-index="${index}" data-word="${word}">
+            ${highlighted}
+            <span class="word-freq">(${freq.toLocaleString()})</span>
+        </div>`;
     }).join('');
     
     autocompleteDropdown.innerHTML = html;

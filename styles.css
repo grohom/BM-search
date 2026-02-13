@@ -101,6 +101,9 @@ header h1 {
     cursor: pointer;
     border-bottom: 1px solid #f0f0f0;
     transition: background 0.2s;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
 }
 
 .autocomplete-item:last-child {
@@ -114,6 +117,12 @@ header h1 {
 
 .autocomplete-item strong {
     color: #667eea;
+}
+
+.word-freq {
+    color: #999;
+    font-size: 0.85em;
+    margin-left: 10px;
 }
 
 .loading {
