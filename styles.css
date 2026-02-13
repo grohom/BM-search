@@ -104,6 +104,7 @@ header h1 {
     display: flex;
     justify-content: space-between;
     align-items: center;
+    gap: 15px;
 }
 
 .autocomplete-item:last-child {
@@ -119,10 +120,15 @@ header h1 {
     color: #667eea;
 }
 
+.word-text {
+    flex: 0 1 auto;
+}
+
 .word-freq {
     color: #999;
     font-size: 0.85em;
-    margin-left: 10px;
+    flex-shrink: 0;
+    white-space: nowrap;
 }
 
 .loading {

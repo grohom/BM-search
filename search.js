@@ -180,7 +180,7 @@ function showAutocomplete(query) {
         const highlighted = highlightPrefix(word, lastToken);
         const freq = wordFreq[word] || 0;
         return `<div class="autocomplete-item" data-index="${index}" data-word="${word}">
-            ${highlighted}
+            <span class="word-text">${highlighted}</span>
             <span class="word-freq">(${freq.toLocaleString()})</span>
         </div>`;
     }).join('');
