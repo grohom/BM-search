@@ -6,6 +6,33 @@ let currentResults = [];
 let currentPage = 1;
 const resultsPerPage = 50;
 
+// Text preprocessing functions to match Python
+function removeAccents(text) {
+    return text.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+}
+
+function tokenize(text) {
+    // Normalize: lowercase and remove accents
+    text = removeAccents(text.toLowerCase());
+    
+    // Extract all sequences of letters and all sequences of digits
+    const tokens = [];
+    
+    // Match all letter sequences (words)
+    const wordMatches = text.matchAll(/[a-z]+/g);
+    for (const match of wordMatches) {
+        tokens.push(match[0]);
+    }
+    
+    // Match all digit sequences (numbers)
+    const numberMatches = text.matchAll(/[0-9]+/g);
+    for (const match of numberMatches) {
+        tokens.push(match[0]);
+    }
+    
+    return tokens;
+}
+
 // DOM elements
 const searchInput = document.getElementById('searchInput');
 const searchButton = document.getElementById('searchButton');
@@ -111,16 +138,23 @@ function showAutocomplete(query) {
         return;
     }
     
-    // Get the last word being typed
-    const words = query.trim().split(/\s+/);
-    const lastWord = words[words.length - 1];
+    // Tokenize the input
+    const tokens = tokenize(query);
     
-    if (lastWord.length < 2) {
+    if (tokens.length === 0) {
         hideAutocomplete();
         return;
     }
     
-    const matches = getMatchingWords(lastWord);
+    // Get the last token being typed
+    const lastToken = tokens[tokens.length - 1];
+    
+    if (lastToken.length < 2) {
+        hideAutocomplete();
+        return;
+    }
+    
+    const matches = getMatchingWords(lastToken);
     
     if (matches.length === 0) {
         hideAutocomplete();
@@ -129,7 +163,7 @@ function showAutocomplete(query) {
     
     // Build autocomplete HTML
     const html = matches.map((word, index) => {
-        const highlighted = highlightPrefix(word, lastWord);
+        const highlighted = highlightPrefix(word, lastToken);
         return `<div class="autocomplete-item" data-index="${index}" data-word="${word}">${highlighted}</div>`;
     }).join('');
     
@@ -159,9 +193,20 @@ function hideAutocomplete() {
 
 // Select an autocomplete item
 function selectAutocompleteItem(word) {
-    const currentWords = searchInput.value.trim().split(/\s+/);
-    currentWords[currentWords.length - 1] = word;
-    searchInput.value = currentWords.join(' ') + ' ';
+    const currentInput = searchInput.value;
+    const tokens = tokenize(currentInput);
+    
+    // Find where the last token starts in the original input
+    // We'll replace from that position to the end
+    const lastTokenStart = currentInput.toLowerCase().lastIndexOf(tokens[tokens.length - 1]);
+    
+    if (lastTokenStart !== -1) {
+        searchInput.value = currentInput.substring(0, lastTokenStart) + word + ' ';
+    } else {
+        // Fallback: just append
+        searchInput.value = currentInput.trim() + ' ' + word + ' ';
+    }
+    
     hideAutocomplete();
     searchInput.focus();
 }
@@ -199,25 +244,25 @@ function performSearch() {
     
     hideAutocomplete();
     
-    // Tokenize query (split by whitespace)
-    const queryWords = query.toLowerCase().split(/\s+/).filter(w => w.length > 0);
+    // Tokenize query
+    const queryTokens = tokenize(query);
     
-    if (queryWords.length === 0) {
-        showStatus('Please enter a search term.');
+    if (queryTokens.length === 0) {
+        showStatus('Please enter valid search terms (words or numbers).');
         resultsDiv.classList.remove('show');
         return;
     }
     
-    // Find projects that contain ALL query words as prefixes
+    // Find projects that contain ALL query tokens as prefixes
     const startTime = performance.now();
     const projectSets = [];
     
-    for (const queryWord of queryWords) {
-        // Find all dictionary words that start with this query word
-        const matchingWords = getMatchingWords(queryWord, 1000);
+    for (const token of queryTokens) {
+        // Find all dictionary words that start with this token
+        const matchingWords = getMatchingWords(token, 1000);
         
         if (matchingWords.length === 0) {
-            showStatus(`No words found starting with "${queryWord}".`);
+            showStatus(`No words found starting with "${token}".`);
             resultsDiv.classList.remove('show');
             return;
         }
@@ -232,7 +277,7 @@ function performSearch() {
         projectSets.push(projectIndices);
     }
     
-    // Intersect all sets (projects must match ALL query words)
+    // Intersect all sets (projects must match ALL query tokens)
     let resultIndices = projectSets[0];
     for (let i = 1; i < projectSets.length; i++) {
         resultIndices = new Set([...resultIndices].filter(x => projectSets[i].has(x)));
