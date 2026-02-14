@@ -357,7 +357,7 @@ function displayResults(searchTime) {
     // Results list
     const html = pageResults.map(result => 
         `<div class="result-item">
-            <span class="result-number">${result.index + 1}.</span>
+            <span class="result-number">Proj. id: ${result.index + 1}</span>
             <span class="result-name">${escapeHtml(result.name)}</span>
         </div>`
     ).join('');
