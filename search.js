@@ -447,6 +447,33 @@ searchInput.addEventListener('input', (e) => {
     }, 200);
 });
 
+// Update autocomplete when caret moves (click or arrow keys)
+searchInput.addEventListener('click', (e) => {
+    clearTimeout(autocompleteTimeout);
+    autocompleteTimeout = setTimeout(() => {
+        showAutocomplete(e.target.value);
+    }, 50);
+});
+
+// Update autocomplete when selection changes (arrow keys, home, end, etc.)
+searchInput.addEventListener('selectionchange', (e) => {
+    clearTimeout(autocompleteTimeout);
+    autocompleteTimeout = setTimeout(() => {
+        showAutocomplete(searchInput.value);
+    }, 50);
+});
+
+// Also handle keyup for arrow keys (left/right) when autocomplete is NOT showing
+searchInput.addEventListener('keyup', (e) => {
+    if (!autocompleteDropdown.classList.contains('show') && 
+        (e.key === 'ArrowLeft' || e.key === 'ArrowRight' || e.key === 'Home' || e.key === 'End')) {
+        clearTimeout(autocompleteTimeout);
+        autocompleteTimeout = setTimeout(() => {
+            showAutocomplete(searchInput.value);
+        }, 50);
+    }
+});
+
 searchInput.addEventListener('keydown', (e) => {
     if (autocompleteDropdown.classList.contains('show')) {
         if (e.key === 'ArrowDown') {
