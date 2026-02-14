@@ -146,23 +146,40 @@ function showAutocomplete(query) {
         return;
     }
     
-    // Tokenize the input
-    const tokens = tokenize(query);
+    // Get caret position
+    const caretPos = searchInput.selectionStart;
     
-    if (tokens.length === 0) {
+    // Find which token the caret is in
+    const beforeCaret = query.substring(0, caretPos);
+    const afterCaret = query.substring(caretPos);
+    
+    // Extract the current word being edited at caret position
+    // Look backwards from caret to find word start
+    let wordStart = caretPos;
+    while (wordStart > 0 && /[a-z0-9]/i.test(query[wordStart - 1])) {
+        wordStart--;
+    }
+    
+    // Look forwards from caret to find word end
+    let wordEnd = caretPos;
+    while (wordEnd < query.length && /[a-z0-9]/i.test(query[wordEnd])) {
+        wordEnd++;
+    }
+    
+    // Extract the word at caret
+    const wordAtCaret = query.substring(wordStart, wordEnd);
+    
+    // Tokenize to get the normalized version
+    const tokens = tokenize(wordAtCaret);
+    
+    if (tokens.length === 0 || tokens[0].length < 2) {
         hideAutocomplete();
         return;
     }
     
-    // Get the last token being typed
-    const lastToken = tokens[tokens.length - 1];
+    const currentToken = tokens[0];
     
-    if (lastToken.length < 2) {
-        hideAutocomplete();
-        return;
-    }
-    
-    let matches = getMatchingWords(lastToken);
+    let matches = getMatchingWords(currentToken);
     
     if (matches.length === 0) {
         hideAutocomplete();
@@ -184,9 +201,9 @@ function showAutocomplete(query) {
     
     // Build autocomplete HTML
     const html = topMatches.map((item, index) => {
-        const highlighted = highlightPrefix(item.word, lastToken);
+        const highlighted = highlightPrefix(item.word, currentToken);
         
-        return `<div class="autocomplete-item" data-index="${index}" data-word="${item.word}">
+        return `<div class="autocomplete-item" data-index="${index}" data-word="${item.word}" data-word-start="${wordStart}" data-word-end="${wordEnd}">
             <span class="word-text">${highlighted}</span>
             <span class="word-freq">(${item.totalFreq.toLocaleString()})</span>
         </div>`;
@@ -199,7 +216,9 @@ function showAutocomplete(query) {
     // Add click handlers
     document.querySelectorAll('.autocomplete-item').forEach(item => {
         item.addEventListener('click', () => {
-            selectAutocompleteItem(item.dataset.word);
+            const wordStart = parseInt(item.dataset.wordStart);
+            const wordEnd = parseInt(item.dataset.wordEnd);
+            selectAutocompleteItem(item.dataset.word, wordStart, wordEnd);
         });
     });
 }
@@ -217,20 +236,16 @@ function hideAutocomplete() {
 }
 
 // Select an autocomplete item
-function selectAutocompleteItem(word) {
+function selectAutocompleteItem(word, wordStart, wordEnd) {
     const currentInput = searchInput.value;
-    const tokens = tokenize(currentInput);
     
-    // Find where the last token starts in the original input
-    // We'll replace from that position to the end
-    const lastTokenStart = currentInput.toLowerCase().lastIndexOf(tokens[tokens.length - 1]);
+    // Replace the word at the specified position
+    const newValue = currentInput.substring(0, wordStart) + word + ' ' + currentInput.substring(wordEnd);
+    searchInput.value = newValue;
     
-    if (lastTokenStart !== -1) {
-        searchInput.value = currentInput.substring(0, lastTokenStart) + word + ' ';
-    } else {
-        // Fallback: just append
-        searchInput.value = currentInput.trim() + ' ' + word + ' ';
-    }
+    // Set caret position after the inserted word
+    const newCaretPos = wordStart + word.length + 1;
+    searchInput.setSelectionRange(newCaretPos, newCaretPos);
     
     hideAutocomplete();
     searchInput.focus();
@@ -444,7 +459,10 @@ searchInput.addEventListener('keydown', (e) => {
             e.preventDefault();
             const items = document.querySelectorAll('.autocomplete-item');
             if (selectedAutocompleteIndex >= 0 && selectedAutocompleteIndex < items.length) {
-                selectAutocompleteItem(items[selectedAutocompleteIndex].dataset.word);
+                const item = items[selectedAutocompleteIndex];
+                const wordStart = parseInt(item.dataset.wordStart);
+                const wordEnd = parseInt(item.dataset.wordEnd);
+                selectAutocompleteItem(item.dataset.word, wordStart, wordEnd);
             } else {
                 performSearch();
             }
