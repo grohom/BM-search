@@ -239,12 +239,16 @@ function hideAutocomplete() {
 function selectAutocompleteItem(word, wordStart, wordEnd) {
     const currentInput = searchInput.value;
     
+    // Check if there's already a space after wordEnd
+    const hasSpaceAfter = wordEnd < currentInput.length && currentInput[wordEnd] === ' ';
+    
     // Replace the word at the specified position
-    const newValue = currentInput.substring(0, wordStart) + word + ' ' + currentInput.substring(wordEnd);
+    const spaceToAdd = hasSpaceAfter ? '' : ' ';
+    const newValue = currentInput.substring(0, wordStart) + word + spaceToAdd + currentInput.substring(wordEnd);
     searchInput.value = newValue;
     
-    // Set caret position after the inserted word
-    const newCaretPos = wordStart + word.length + 1;
+    // Set caret position after the inserted word (and space if added)
+    const newCaretPos = wordStart + word.length + spaceToAdd.length;
     searchInput.setSelectionRange(newCaretPos, newCaretPos);
     
     hideAutocomplete();
